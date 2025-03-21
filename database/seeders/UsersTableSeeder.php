@@ -15,19 +15,21 @@ class UsersTableSeeder extends Seeder
      */
     public function run()
     {
-        DB::table('users')->insert([
-            'name' => 'Anwar',
-            'email' => 'anwar@gmail.com',
-            'password' => bcrypt('123456'),
-            'roles' => json_encode(['CUSTOMER']),
-            'status' => 'ACTIVE',
-        ],
-        [
-            'name' => 'Budi',
-            'email' => 'budi@gmail.com',
-            'password' => bcrypt('123456'),
-            'roles' => json_encode(['CUSTOMER']),
-            'status' => 'ACTIVE',
-        ]);
+        DB::table('users')->insert(
+            [
+                'name' => 'Rina',
+                'email' => 'rina@example.com',
+                'password' => bcrypt('password123'),
+                'roles' => json_encode(['ADMIN']),
+                'status' => 'ACTIVE',
+            ],
+            [
+                'name' => 'Tommy',
+                'email' => 'tommy@example.com',
+                'password' => bcrypt('password123'),
+                'roles' => json_encode(['CUSTOMER']),
+                'status' => 'INACTIVE',
+            ]
+        );
     }
 }
