@@ -4,36 +4,33 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Category;
-use App\Models\Book;
-use App\Models\BookCategory;
 use App\Http\Resources\Category as CategoryResource;
 use App\Http\Resources\Categories as CategoryResourceCollection;
 
-
 class CategoryController extends Controller
 {
-     /**
+    /**
      * Display a listing of the resource.
      *
      * @return \Illuminate\Http\Response
      */
     public function index()
     {
+        // Paginate the categories with a default per-page value of 6.
         $criteria = Category::paginate(6);
         return new CategoryResourceCollection($criteria);
     }
 
     /**
-     * Display a listing of the resource.
+     * Display a random list of categories.
      *
+     * @param  int  $count
      * @return \Illuminate\Http\Response
      */
-    public function random($count)
+    public function random(int $count)
     {
-        $criteria = Category::select('*')
-            ->inRandomOrder()
-            ->limit($count)
-            ->get();        
+        // Get random categories based on the count specified.
+        $criteria = Category::inRandomOrder()->limit($count)->get();
         return new CategoryResourceCollection($criteria);
     }
 
@@ -45,7 +42,7 @@ class CategoryController extends Controller
      */
     public function store(Request $request)
     {
-        //
+        // Optionally, implement store logic for category creation
     }
 
     /**
@@ -56,14 +53,28 @@ class CategoryController extends Controller
      */
     public function show($id)
     {
-        return new CategoryResource(Category::find($id));
+        // Return category with the given ID or a 404 response if not found
+        $category = Category::find($id);
+        if (!$category) {
+            return response()->json(['message' => 'Category not found'], 404);
+        }
+        return new CategoryResource($category);
     }
 
+    /**
+     * Display the category by slug.
+     *
+     * @param  string  $slug
+     * @return \Illuminate\Http\Response
+     */
     public function slug($slug)
     {
-       
-        $criteria = Category::where('slug', $slug)->first();
-        return new CategoryResource($criteria);
+        // Find category by slug
+        $category = Category::where('slug', $slug)->first();
+        if (!$category) {
+            return response()->json(['message' => 'Category not found'], 404);
+        }
+        return new CategoryResource($category);
     }
 
     /**
@@ -75,7 +86,7 @@ class CategoryController extends Controller
      */
     public function update(Request $request, $id)
     {
-        //
+        // Optionally, implement update logic for category
     }
 
     /**
@@ -86,6 +97,6 @@ class CategoryController extends Controller
      */
     public function destroy($id)
     {
-        //
+        // Optionally, implement destroy logic for category
     }
 }
