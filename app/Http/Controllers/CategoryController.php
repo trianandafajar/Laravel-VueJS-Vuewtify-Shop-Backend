@@ -10,50 +10,51 @@ use App\Http\Resources\Categories as CategoryResourceCollection;
 class CategoryController extends Controller
 {
     /**
-     * Display a listing of the resource.
-     *
-     * @return \Illuminate\Http\Response
+     * Get all categories with pagination.
      */
     public function index()
     {
-        // Paginate the categories with a default per-page value of 6.
-        $criteria = Category::paginate(6);
-        return new CategoryResourceCollection($criteria);
+        $categories = Category::select('id', 'name', 'slug')->paginate(6);
+        return new CategoryResourceCollection($categories);
     }
 
     /**
-     * Display a random list of categories.
-     *
-     * @param  int  $count
-     * @return \Illuminate\Http\Response
+     * Get random categories.
      */
     public function random(int $count)
     {
-        // Get random categories based on the count specified.
-        $criteria = Category::inRandomOrder()->limit($count)->get();
-        return new CategoryResourceCollection($criteria);
+        $categories = Category::select('id', 'name', 'slug')
+            ->inRandomOrder()
+            ->limit($count)
+            ->get();
+
+        return new CategoryResourceCollection($categories);
     }
 
     /**
-     * Store a newly created resource in storage.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\Response
+     * Store a new category.
      */
     public function store(Request $request)
     {
-        // Optionally, implement store logic for category creation
+        $validated = $request->validate([
+            'name' => 'required|string|max:255|unique:categories',
+            'slug' => 'required|string|max:255|unique:categories',
+        ]);
+
+        $category = Category::create($validated);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Category added successfully',
+            'data' => new CategoryResource($category),
+        ], 201);
     }
 
     /**
-     * Display the specified resource.
-     *
-     * @param  int  $id
-     * @return \Illuminate\Http\Response
+     * Get category by ID.
      */
     public function show($id)
     {
-        // Return category with the given ID or a 404 response if not found
         $category = Category::find($id);
         if (!$category) {
             return response()->json(['message' => 'Category not found'], 404);
@@ -62,14 +63,10 @@ class CategoryController extends Controller
     }
 
     /**
-     * Display the category by slug.
-     *
-     * @param  string  $slug
-     * @return \Illuminate\Http\Response
+     * Get category by slug.
      */
     public function slug($slug)
     {
-        // Find category by slug
         $category = Category::where('slug', $slug)->first();
         if (!$category) {
             return response()->json(['message' => 'Category not found'], 404);
@@ -78,25 +75,44 @@ class CategoryController extends Controller
     }
 
     /**
-     * Update the specified resource in storage.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  int  $id
-     * @return \Illuminate\Http\Response
+     * Update category.
      */
     public function update(Request $request, $id)
     {
-        // Optionally, implement update logic for category
+        $category = Category::find($id);
+        if (!$category) {
+            return response()->json(['message' => 'Category not found'], 404);
+        }
+
+        $validated = $request->validate([
+            'name' => 'sometimes|required|string|max:255|unique:categories,name,' . $id,
+            'slug' => 'sometimes|required|string|max:255|unique:categories,slug,' . $id,
+        ]);
+
+        $category->update($validated);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Category updated successfully',
+            'data' => new CategoryResource($category),
+        ], 200);
     }
 
     /**
-     * Remove the specified resource from storage.
-     *
-     * @param  int  $id
-     * @return \Illuminate\Http\Response
+     * Delete a category.
      */
     public function destroy($id)
     {
-        // Optionally, implement destroy logic for category
+        $category = Category::find($id);
+        if (!$category) {
+            return response()->json(['message' => 'Category not found'], 404);
+        }
+
+        $category->delete();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Category deleted successfully',
+        ], 200);
     }
 }
