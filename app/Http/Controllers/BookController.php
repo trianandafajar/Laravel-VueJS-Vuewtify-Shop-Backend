@@ -33,7 +33,7 @@ class BookController extends Controller
     public function search(Request $request)
     {
         $keyword = $request->input('keyword', '');
-        
+
         $books = Book::where('title', 'LIKE', "%$keyword%")
             ->orderBy('views', 'DESC')
             ->paginate(6);  // Gunakan pagination untuk hasil lebih optimal.
@@ -121,7 +121,7 @@ class BookController extends Controller
     {
         $cartItems = json_decode($request->carts, true);
         $bookIds = array_column($cartItems, 'id');
-        
+
         // Ambil semua buku yang ada dalam keranjang
         $books = Book::whereIn('id', $bookIds)->get()->keyBy('id');
 
