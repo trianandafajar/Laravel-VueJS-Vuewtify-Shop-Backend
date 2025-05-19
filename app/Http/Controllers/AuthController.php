@@ -14,14 +14,14 @@ class AuthController extends Controller
     public function login(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'email' => 'required|email', 
+            'email' => 'required|email',
             'password' => 'required|min:6',
         ]);
 
         if ($validator->fails()) {
             return response()->json([
                 'status' => 'error',
-                'message' => $validator->errors(),
+                'errors' => $validator->errors()->toArray(),
                 'data' => null
             ], 422);
         }
@@ -36,7 +36,9 @@ class AuthController extends Controller
             ], 401);
         }
 
-        // Generate Token dengan Laravel Sanctum
+        // Optional: Batasi hanya 1 token aktif
+        $user->tokens()->delete();
+
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
