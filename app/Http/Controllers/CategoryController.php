@@ -3,116 +3,126 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use App\Models\Category;
+use App\Repositories\CategoryRepository;
 use App\Http\Resources\Category as CategoryResource;
 use App\Http\Resources\Categories as CategoryResourceCollection;
+use Illuminate\Http\JsonResponse;
 
 class CategoryController extends Controller
 {
-    /**
-     * Get all categories with pagination.
-     */
-    public function index()
+    protected $categoryRepository;
+
+    public function __construct(CategoryRepository $categoryRepository)
     {
-        $categories = Category::select('id', 'name', 'slug')->paginate(6);
+        $this->categoryRepository = $categoryRepository;
+    }
+
+    /**
+     * Get all categories
+     */
+    public function index(): CategoryResourceCollection
+    {
+        $categories = $this->categoryRepository->getAll();
         return new CategoryResourceCollection($categories);
     }
 
     /**
-     * Get random categories.
+     * Get random categories
      */
-    public function random(int $count)
+    public function random(int $count): CategoryResourceCollection
     {
-        $categories = Category::select('id', 'name', 'slug')
-            ->inRandomOrder()
-            ->limit($count)
-            ->get();
-
+        $categories = $this->categoryRepository->getRandom($count);
         return new CategoryResourceCollection($categories);
     }
 
     /**
-     * Store a new category.
+     * Get category by slug
      */
-    public function store(Request $request)
+    public function slug(string $slug): JsonResponse
     {
-        $validated = $request->validate([
-            'name' => 'required|string|max:255|unique:categories',
-            'slug' => 'required|string|max:255|unique:categories',
-        ]);
-
-        $category = Category::create($validated);
+        $category = $this->categoryRepository->findBySlug($slug);
+        
+        if (!$category) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Category not found'
+            ], 404);
+        }
 
         return response()->json([
             'status' => 'success',
-            'message' => 'Category added successfully',
-            'data' => new CategoryResource($category),
+            'data' => new CategoryResource($category)
+        ]);
+    }
+
+    /**
+     * Store a new category
+     */
+    public function store(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'slug' => 'required|string|max:255|unique:categories',
+            'description' => 'nullable|string'
+        ]);
+
+        $category = $this->categoryRepository->create($validated);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Category created successfully',
+            'data' => new CategoryResource($category)
         ], 201);
     }
 
     /**
-     * Get category by ID.
+     * Update category
      */
-    public function show($id)
+    public function update(Request $request, string $slug): JsonResponse
     {
-        $category = Category::find($id);
+        $category = $this->categoryRepository->findBySlug($slug);
+        
         if (!$category) {
-            return response()->json(['message' => 'Category not found'], 404);
-        }
-        return new CategoryResource($category);
-    }
-
-    /**
-     * Get category by slug.
-     */
-    public function slug($slug)
-    {
-        $category = Category::where('slug', $slug)->first();
-        if (!$category) {
-            return response()->json(['message' => 'Category not found'], 404);
-        }
-        return new CategoryResource($category);
-    }
-
-    /**
-     * Update category.
-     */
-    public function update(Request $request, $id)
-    {
-        $category = Category::find($id);
-        if (!$category) {
-            return response()->json(['message' => 'Category not found'], 404);
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Category not found'
+            ], 404);
         }
 
         $validated = $request->validate([
-            'name' => 'sometimes|required|string|max:255|unique:categories,name,' . $id,
-            'slug' => 'sometimes|required|string|max:255|unique:categories,slug,' . $id,
+            'name' => 'sometimes|required|string|max:255',
+            'slug' => 'sometimes|required|string|max:255|unique:categories,slug,' . $category->id,
+            'description' => 'nullable|string'
         ]);
 
-        $category->update($validated);
+        $this->categoryRepository->update($category, $validated);
 
         return response()->json([
             'status' => 'success',
             'message' => 'Category updated successfully',
-            'data' => new CategoryResource($category),
-        ], 200);
+            'data' => new CategoryResource($category)
+        ]);
     }
 
     /**
-     * Delete a category.
+     * Delete category
      */
-    public function destroy($id)
+    public function destroy(string $slug): JsonResponse
     {
-        $category = Category::find($id);
+        $category = $this->categoryRepository->findBySlug($slug);
+        
         if (!$category) {
-            return response()->json(['message' => 'Category not found'], 404);
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Category not found'
+            ], 404);
         }
 
-        $category->delete();
+        $this->categoryRepository->delete($category);
 
         return response()->json([
             'status' => 'success',
-            'message' => 'Category deleted successfully',
-        ], 200);
+            'message' => 'Category deleted successfully'
+        ]);
     }
 }
