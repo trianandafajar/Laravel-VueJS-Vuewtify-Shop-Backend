@@ -4,47 +4,52 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Book;
+use App\Repositories\BookRepository;
 use App\Http\Resources\Book as BookResource;
 use App\Http\Resources\Books as BookResourceCollection;
+use Illuminate\Http\JsonResponse;
 
 class BookController extends Controller
 {
+    protected $bookRepository;
+
+    public function __construct(BookRepository $bookRepository)
+    {
+        $this->bookRepository = $bookRepository;
+    }
+
     /**
      * Get all books with pagination.
      */
-    public function index()
+    public function index(): BookResourceCollection
     {
-        $books = Book::paginate(6);
+        $books = $this->bookRepository->getAllPaginated();
         return new BookResourceCollection($books);
     }
 
     /**
      * Get top books by views.
      */
-    public function top(int $count)
+    public function top(int $count): BookResourceCollection
     {
-        $books = Book::orderBy('views', 'DESC')->limit($count)->get();
+        $books = $this->bookRepository->getTopBooks($count);
         return new BookResourceCollection($books);
     }
 
     /**
      * Search books by title.
      */
-    public function search(Request $request)
+    public function search(Request $request): BookResourceCollection
     {
         $keyword = $request->input('keyword', '');
-
-        $books = Book::where('title', 'LIKE', "%$keyword%")
-            ->orderBy('views', 'DESC')
-            ->paginate(6);  // Gunakan pagination untuk hasil lebih optimal.
-
+        $books = $this->bookRepository->searchByTitle($keyword);
         return new BookResourceCollection($books);
     }
 
     /**
      * Store a new book.
      */
-    public function store(Request $request)
+    public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
             'title' => 'required|string|max:255',
@@ -54,7 +59,7 @@ class BookController extends Controller
             'cover' => 'nullable|string',
         ]);
 
-        $book = Book::create($validated);
+        $book = $this->bookRepository->create($validated);
 
         return response()->json([
             'status' => 'success',
@@ -66,33 +71,44 @@ class BookController extends Controller
     /**
      * Get a book by ID.
      */
-    public function show(int $id)
+    public function show(int $id): JsonResponse
     {
-        $book = Book::find($id);
+        $book = $this->bookRepository->findById($id);
+        
         if (!$book) {
             return response()->json(['message' => 'Book not found'], 404);
         }
-        return new BookResource($book);
+        
+        return response()->json([
+            'status' => 'success',
+            'data' => new BookResource($book)
+        ]);
     }
 
     /**
      * Get a book by slug.
      */
-    public function slug(string $slug)
+    public function slug(string $slug): JsonResponse
     {
-        $book = Book::where('slug', $slug)->first();
+        $book = $this->bookRepository->findBySlug($slug);
+        
         if (!$book) {
             return response()->json(['message' => 'Book not found'], 404);
         }
-        return new BookResource($book);
+        
+        return response()->json([
+            'status' => 'success',
+            'data' => new BookResource($book)
+        ]);
     }
 
     /**
      * Update a book.
      */
-    public function update(Request $request, int $id)
+    public function update(Request $request, int $id): JsonResponse
     {
-        $book = Book::find($id);
+        $book = $this->bookRepository->findById($id);
+        
         if (!$book) {
             return response()->json(['message' => 'Book not found'], 404);
         }
@@ -105,25 +121,23 @@ class BookController extends Controller
             'cover' => 'nullable|string',
         ]);
 
-        $book->update($validated);
+        $this->bookRepository->update($book, $validated);
 
         return response()->json([
             'status' => 'success',
             'message' => 'Book updated successfully',
             'data' => new BookResource($book),
-        ], 200);
+        ]);
     }
 
     /**
      * Handle book cart logic.
      */
-    public function cart(Request $request)
+    public function cart(Request $request): JsonResponse
     {
         $cartItems = json_decode($request->carts, true);
         $bookIds = array_column($cartItems, 'id');
-
-        // Ambil semua buku yang ada dalam keranjang
-        $books = Book::whereIn('id', $bookIds)->get()->keyBy('id');
+        $books = $this->bookRepository->getBooksByIds($bookIds);
 
         $cartResponse = array_map(function ($cartItem) use ($books) {
             $bookId = $cartItem['id'];
@@ -132,7 +146,7 @@ class BookController extends Controller
             if (isset($books[$bookId])) {
                 $book = $books[$bookId];
                 $quantityAvailable = min($quantityRequested, $book->stock);
-                $note = $quantityAvailable === $quantityRequested ? 'safe' : ($quantityAvailable === $book->stock ? 'out of stock' : 'unsafe');
+                $note = $this->determineCartNote($quantityAvailable, $quantityRequested, $book->stock);
 
                 return [
                     'id' => $book->id,
@@ -142,18 +156,27 @@ class BookController extends Controller
                     'quantity' => $quantityAvailable,
                     'note' => $note,
                 ];
-            } else {
-                return [
-                    'id' => $bookId,
-                    'note' => 'book not found',
-                ];
             }
+
+            return [
+                'id' => $bookId,
+                'note' => 'book not found',
+            ];
         }, $cartItems);
 
         return response()->json([
             'status' => 'success',
             'message' => 'Cart data retrieved',
             'data' => $cartResponse,
-        ], 200);
+        ]);
+    }
+
+    private function determineCartNote(int $quantityAvailable, int $quantityRequested, int $stock): string
+    {
+        if ($quantityAvailable === $quantityRequested) {
+            return 'safe';
+        }
+        
+        return $quantityAvailable === $stock ? 'out of stock' : 'unsafe';
     }
 }
