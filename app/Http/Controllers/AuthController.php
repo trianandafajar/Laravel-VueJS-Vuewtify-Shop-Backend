@@ -3,105 +3,100 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Validator;
-use App\Models\User;
+use App\Repositories\AuthRepository;
+use App\Http\Resources\User as UserResource;
+use Illuminate\Http\JsonResponse;
 
 class AuthController extends Controller
 {
-    // Login User
-    public function login(Request $request)
+    protected $authRepository;
+
+    public function __construct(AuthRepository $authRepository)
     {
-        $validator = Validator::make($request->all(), [
-            'email' => 'required|email',
-            'password' => 'required|min:6',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'status' => 'error',
-                'errors' => $validator->errors()->toArray(),
-                'data' => null
-            ], 422);
-        }
-
-        $user = User::where('email', $request->email)->first();
-
-        if (!$user || !Hash::check($request->password, $user->password)) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Email atau password salah',
-                'data' => null
-            ], 401);
-        }
-
-        // Optional: Batasi hanya 1 token aktif
-        $user->tokens()->delete();
-
-        $token = $user->createToken('auth_token')->plainTextToken;
-
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Login berhasil',
-            'data' => [
-                'user' => $user,
-                'token' => $token
-            ]
-        ], 200);
+        $this->authRepository = $authRepository;
     }
 
-    // Register User
-    public function register(Request $request)
+    public function register(Request $request): JsonResponse
     {
-        $validator = Validator::make($request->all(), [
+        $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
-            'password' => 'required|string|min:6',
+            'password' => 'required|string|min:8|confirmed',
+            'password_confirmation' => 'required|string|min:8'
         ]);
 
-        if ($validator->fails()) {
-            return response()->json([
-                'status' => 'error',
-                'message' => $validator->errors(),
-                'data' => null
-            ], 422);
-        }
-
-        $user = User::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'password' => Hash::make($request->password),
-            'roles' => json_encode(['CUSTOMER']),
-        ]);
-
-        // Generate Token untuk user baru
+        $user = $this->authRepository->register($validated);
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
             'status' => 'success',
-            'message' => 'Registrasi berhasil',
+            'message' => 'User registered successfully',
             'data' => [
-                'user' => $user,
+                'user' => new UserResource($user),
                 'token' => $token
             ]
         ], 201);
     }
 
-    // Logout User
-    public function logout(Request $request)
+    public function login(Request $request): JsonResponse
     {
-        $user = Auth::user();
+        $validated = $request->validate([
+            'email' => 'required|string|email',
+            'password' => 'required|string'
+        ]);
 
-        if ($user) {
-            // Revoke token user
-            $user->tokens()->delete();
+        $token = $this->authRepository->login($validated);
+
+        if (!$token) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Invalid credentials'
+            ], 401);
+        }
+
+        $user = $this->authRepository->getUser();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Login successful',
+            'data' => [
+                'user' => new UserResource($user),
+                'token' => $token
+            ]
+        ]);
+    }
+
+    public function logout(): JsonResponse
+    {
+        $success = $this->authRepository->logout();
+
+        if (!$success) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'User not authenticated'
+            ], 401);
         }
 
         return response()->json([
             'status' => 'success',
-            'message' => 'Logout berhasil',
-            'data' => []
-        ], 200);
+            'message' => 'Successfully logged out'
+        ]);
+    }
+
+    public function user(): JsonResponse
+    {
+        $user = $this->authRepository->getUser();
+
+        if (!$user) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'User not authenticated'
+            ], 401);
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'data' => new UserResource($user)
+        ]);
     }
 }
